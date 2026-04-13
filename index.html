@@ -950,8 +950,8 @@ function startGeocoding() {
       if (done === total) onGeocodeAllDone(failedItems);
       return;
     }
-    geocoder.addressSearch(addr, (result, status) => {
-      if (status === kakao.maps.services.Status.OK && result.length > 0) {
+    geocoder.addressSearch(addr, (result, geocodeStatus) => {
+      if (geocodeStatus === kakao.maps.services.Status.OK && result.length > 0) {
         geocodeResults[idx] = { lat: parseFloat(result[0].y), lng: parseFloat(result[0].x) };
       } else {
         geocodeResults[idx] = null;
@@ -1033,9 +1033,9 @@ document.getElementById('retry-input').addEventListener('keydown', function(e) {
 function fetchSuggestions(query) {
   if (!window.kakao || !kakao.maps.services) return;
   const geocoder = new kakao.maps.services.Geocoder();
-  geocoder.addressSearch(query, (result, status) => {
+  geocoder.addressSearch(query, (result, suggestStatus) => {
     const sugBox = document.getElementById('retry-suggest');
-    if (status !== kakao.maps.services.Status.OK || result.length === 0) {
+    if (suggestStatus !== kakao.maps.services.Status.OK || result.length === 0) {
       sugBox.style.display = 'none'; return;
     }
     sugBox.innerHTML = result.slice(0, 5).map((r, i) => `
@@ -1065,8 +1065,8 @@ function retryConfirm() {
   if (!addr) { toast('주소를 입력해 주세요.', 'error'); return; }
   const item = retryQueue[0];
   const geocoder = new kakao.maps.services.Geocoder();
-  geocoder.addressSearch(addr, (result, status) => {
-    if (status === kakao.maps.services.Status.OK && result.length > 0) {
+  geocoder.addressSearch(addr, (result, confirmStatus) => {
+    if (confirmStatus === kakao.maps.services.Status.OK && result.length > 0) {
       geocodeResults[item.idx] = { lat: parseFloat(result[0].y), lng: parseFloat(result[0].x) };
       retryQueue.shift();
       showNextRetry();
