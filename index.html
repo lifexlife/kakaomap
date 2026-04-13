@@ -585,6 +585,8 @@
   <div id="api-key-wrap">
     <label>JavaScript 키</label>
     <input type="text" id="api-key-input" placeholder="발급받은 API 키 입력" autocomplete="off"/>
+    <label style="margin-left:8px;">REST API 키</label>
+    <input type="text" id="rest-api-key-input" placeholder="PNG 저장용" autocomplete="off" style="width:180px;"/>
     <button id="load-map-btn" onclick="initMap()">지도 로드</button>
   </div>
 </header>
@@ -1144,16 +1146,18 @@ function toggleCluster() {
 function saveMapAsPng() {
   if (!map) { toast('지도를 먼저 로드해 주세요.', 'error'); return; }
 
-  const key = document.getElementById('api-key-input').value.trim();
+  const restKey = document.getElementById('rest-api-key-input').value.trim();
+  if (!restKey) { toast('REST API 키를 입력해 주세요. (PNG 저장용)', 'error'); return; }
+
   const center = map.getCenter();
   const level  = map.getLevel();
   const mapWrap = document.getElementById('map-wrap');
-  const w = mapWrap.offsetWidth;
-  const h = mapWrap.offsetHeight;
+  const w = Math.min(mapWrap.offsetWidth, 1280);
+  const h = Math.min(mapWrap.offsetHeight, 1280);
 
-  // Static Map API URL 구성
+  // Static Map API URL 구성 (REST API 키 사용)
   let url = `https://dapi.kakao.com/v2/maps/staticmap`
-    + `?appkey=${key}`
+    + `?appkey=${restKey}`
     + `&center=${center.getLng()},${center.getLat()}`
     + `&level=${level}`
     + `&width=${w}&height=${h}`;
@@ -1162,7 +1166,7 @@ function saveMapAsPng() {
   if (currentMapType === 'terrain')   url += '&map_type=terrain_on';
   if (currentMapType === 'cadastral') url += '&map_type=cadastral_layer_on';
 
-  // 마커 추가 (최대 100개 제한)
+  // 마커 추가 (최대 100개 제한, URL 길이 제한 대응)
   const MAX_MARKERS = 100;
   const visibleMarkers = markers.slice(0, MAX_MARKERS);
   if (visibleMarkers.length > 0) {
@@ -1173,19 +1177,30 @@ function saveMapAsPng() {
     url += `&markers=color:red|size:medium|${markerParams}`;
   }
 
-  // 링크 클릭으로 다운로드
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `kakaomap_${new Date().toISOString().slice(0,19).replace(/[:.]/g,'-')}.png`;
-  a.target = '_blank';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  // fetch로 blob 받아서 다운로드 (CORS 우회)
+  toast('PNG 생성 중...', 'info');
+  fetch(url)
+    .then(res => {
+      if (!res.ok) return res.json().then(j => { throw new Error(j.message || res.status); });
+      return res.blob();
+    })
+    .then(blob => {
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `kakaomap_${new Date().toISOString().slice(0,19).replace(/[:.]/g,'-')}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+      toast('PNG 저장 완료!', 'success');
+    })
+    .catch(err => {
+      toast('저장 실패: ' + err.message, 'error');
+    });
 
   if (markers.length > MAX_MARKERS) {
     toast(`마커가 많아 상위 ${MAX_MARKERS}개만 표시됩니다.`, 'info');
-  } else {
-    toast('PNG 저장 중...', 'success');
   }
 }
 
