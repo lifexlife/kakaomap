@@ -585,8 +585,6 @@
   <div id="api-key-wrap">
     <label>JavaScript 키</label>
     <input type="text" id="api-key-input" placeholder="발급받은 API 키 입력" autocomplete="off"/>
-    <label style="margin-left:8px;">REST API 키</label>
-    <input type="text" id="rest-api-key-input" placeholder="PNG 저장용" autocomplete="off" style="width:180px;"/>
     <button id="load-map-btn" onclick="initMap()">지도 로드</button>
   </div>
 </header>
@@ -702,10 +700,6 @@
         <button class="map-action-btn" id="cluster-toggle-btn" onclick="toggleCluster()">
           <svg viewBox="0 0 16 16" fill="currentColor"><circle cx="4" cy="4" r="2.5"/><circle cx="12" cy="4" r="2.5"/><circle cx="4" cy="12" r="2.5"/><circle cx="12" cy="12" r="2.5"/><circle cx="8" cy="8" r="2"/></svg>
           클러스터 ON
-        </button>
-        <button class="map-action-btn" onclick="saveMapAsPng()">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2"/></svg>
-          PNG 저장
         </button>
         <button class="map-action-btn danger" onclick="resetMarkers()">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M6 4V2.5h4V4M6.5 7v5M9.5 7v5M4 4l.8 8.5a1 1 0 001 .9h4.4a1 1 0 001-.9L12 4"/></svg>
@@ -1139,68 +1133,6 @@ function toggleCluster() {
     btn.innerHTML = `<svg viewBox="0 0 16 16" fill="currentColor"><circle cx="4" cy="4" r="2.5"/><circle cx="12" cy="4" r="2.5"/><circle cx="4" cy="12" r="2.5"/><circle cx="12" cy="12" r="2.5"/><circle cx="8" cy="8" r="2"/></svg>클러스터 OFF`;
     btn.style.color = 'var(--kakao)';
     toast('클러스터러를 껐습니다.', 'info');
-  }
-}
-
-/* ── PNG 저장 (Static Map API) ── */
-function saveMapAsPng() {
-  if (!map) { toast('지도를 먼저 로드해 주세요.', 'error'); return; }
-
-  const restKey = document.getElementById('rest-api-key-input').value.trim();
-  if (!restKey) { toast('REST API 키를 입력해 주세요. (PNG 저장용)', 'error'); return; }
-
-  const center = map.getCenter();
-  const level  = map.getLevel();
-  const mapWrap = document.getElementById('map-wrap');
-  const w = Math.min(mapWrap.offsetWidth, 1280);
-  const h = Math.min(mapWrap.offsetHeight, 1280);
-
-  // Static Map API URL 구성 (REST API 키 사용)
-  let url = `https://dapi.kakao.com/v2/maps/staticmap`
-    + `?appkey=${restKey}`
-    + `&center=${center.getLng()},${center.getLat()}`
-    + `&level=${level}`
-    + `&width=${w}&height=${h}`;
-
-  // 현재 지도 타입 오버레이 반영
-  if (currentMapType === 'terrain')   url += '&map_type=terrain_on';
-  if (currentMapType === 'cadastral') url += '&map_type=cadastral_layer_on';
-
-  // 마커 추가 (최대 100개 제한, URL 길이 제한 대응)
-  const MAX_MARKERS = 100;
-  const visibleMarkers = markers.slice(0, MAX_MARKERS);
-  if (visibleMarkers.length > 0) {
-    const markerParams = visibleMarkers.map(m => {
-      const pos = m.getPosition();
-      return `${pos.getLng()},${pos.getLat()}`;
-    }).join('|');
-    url += `&markers=color:red|size:medium|${markerParams}`;
-  }
-
-  // fetch로 blob 받아서 다운로드 (CORS 우회)
-  toast('PNG 생성 중...', 'info');
-  fetch(url)
-    .then(res => {
-      if (!res.ok) return res.json().then(j => { throw new Error(j.message || res.status); });
-      return res.blob();
-    })
-    .then(blob => {
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = `kakaomap_${new Date().toISOString().slice(0,19).replace(/[:.]/g,'-')}.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
-      toast('PNG 저장 완료!', 'success');
-    })
-    .catch(err => {
-      toast('저장 실패: ' + err.message, 'error');
-    });
-
-  if (markers.length > MAX_MARKERS) {
-    toast(`마커가 많아 상위 ${MAX_MARKERS}개만 표시됩니다.`, 'info');
   }
 }
 
