@@ -701,6 +701,10 @@
           <svg viewBox="0 0 16 16" fill="currentColor"><circle cx="4" cy="4" r="2.5"/><circle cx="12" cy="4" r="2.5"/><circle cx="4" cy="12" r="2.5"/><circle cx="12" cy="12" r="2.5"/><circle cx="8" cy="8" r="2"/></svg>
           클러스터 ON
         </button>
+        <button class="map-action-btn" onclick="saveMapAsPng()">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2"/></svg>
+          PNG 저장
+        </button>
         <button class="map-action-btn danger" onclick="resetMarkers()">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M6 4V2.5h4V4M6.5 7v5M9.5 7v5M4 4l.8 8.5a1 1 0 001 .9h4.4a1 1 0 001-.9L12 4"/></svg>
           마커 초기화
@@ -950,8 +954,8 @@ function startGeocoding() {
       if (done === total) onGeocodeAllDone(failedItems);
       return;
     }
-    geocoder.addressSearch(addr, (result, geocodeStatus) => {
-      if (geocodeStatus === kakao.maps.services.Status.OK && result.length > 0) {
+    geocoder.addressSearch(addr, (result, status) => {
+      if (status === kakao.maps.services.Status.OK && result.length > 0) {
         geocodeResults[idx] = { lat: parseFloat(result[0].y), lng: parseFloat(result[0].x) };
       } else {
         geocodeResults[idx] = null;
@@ -1033,9 +1037,9 @@ document.getElementById('retry-input').addEventListener('keydown', function(e) {
 function fetchSuggestions(query) {
   if (!window.kakao || !kakao.maps.services) return;
   const geocoder = new kakao.maps.services.Geocoder();
-  geocoder.addressSearch(query, (result, suggestStatus) => {
+  geocoder.addressSearch(query, (result, status) => {
     const sugBox = document.getElementById('retry-suggest');
-    if (suggestStatus !== kakao.maps.services.Status.OK || result.length === 0) {
+    if (status !== kakao.maps.services.Status.OK || result.length === 0) {
       sugBox.style.display = 'none'; return;
     }
     sugBox.innerHTML = result.slice(0, 5).map((r, i) => `
@@ -1065,8 +1069,8 @@ function retryConfirm() {
   if (!addr) { toast('주소를 입력해 주세요.', 'error'); return; }
   const item = retryQueue[0];
   const geocoder = new kakao.maps.services.Geocoder();
-  geocoder.addressSearch(addr, (result, confirmStatus) => {
-    if (confirmStatus === kakao.maps.services.Status.OK && result.length > 0) {
+  geocoder.addressSearch(addr, (result, status) => {
+    if (status === kakao.maps.services.Status.OK && result.length > 0) {
       geocodeResults[item.idx] = { lat: parseFloat(result[0].y), lng: parseFloat(result[0].x) };
       retryQueue.shift();
       showNextRetry();
@@ -1133,6 +1137,55 @@ function toggleCluster() {
     btn.innerHTML = `<svg viewBox="0 0 16 16" fill="currentColor"><circle cx="4" cy="4" r="2.5"/><circle cx="12" cy="4" r="2.5"/><circle cx="4" cy="12" r="2.5"/><circle cx="12" cy="12" r="2.5"/><circle cx="8" cy="8" r="2"/></svg>클러스터 OFF`;
     btn.style.color = 'var(--kakao)';
     toast('클러스터러를 껐습니다.', 'info');
+  }
+}
+
+/* ── PNG 저장 (Static Map API) ── */
+function saveMapAsPng() {
+  if (!map) { toast('지도를 먼저 로드해 주세요.', 'error'); return; }
+
+  const key = document.getElementById('api-key-input').value.trim();
+  const center = map.getCenter();
+  const level  = map.getLevel();
+  const mapWrap = document.getElementById('map-wrap');
+  const w = mapWrap.offsetWidth;
+  const h = mapWrap.offsetHeight;
+
+  // Static Map API URL 구성
+  let url = `https://dapi.kakao.com/v2/maps/staticmap`
+    + `?appkey=${key}`
+    + `&center=${center.getLng()},${center.getLat()}`
+    + `&level=${level}`
+    + `&width=${w}&height=${h}`;
+
+  // 현재 지도 타입 오버레이 반영
+  if (currentMapType === 'terrain')   url += '&map_type=terrain_on';
+  if (currentMapType === 'cadastral') url += '&map_type=cadastral_layer_on';
+
+  // 마커 추가 (최대 100개 제한)
+  const MAX_MARKERS = 100;
+  const visibleMarkers = markers.slice(0, MAX_MARKERS);
+  if (visibleMarkers.length > 0) {
+    const markerParams = visibleMarkers.map(m => {
+      const pos = m.getPosition();
+      return `${pos.getLng()},${pos.getLat()}`;
+    }).join('|');
+    url += `&markers=color:red|size:medium|${markerParams}`;
+  }
+
+  // 링크 클릭으로 다운로드
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `kakaomap_${new Date().toISOString().slice(0,19).replace(/[:.]/g,'-')}.png`;
+  a.target = '_blank';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  if (markers.length > MAX_MARKERS) {
+    toast(`마커가 많아 상위 ${MAX_MARKERS}개만 표시됩니다.`, 'info');
+  } else {
+    toast('PNG 저장 중...', 'success');
   }
 }
 
