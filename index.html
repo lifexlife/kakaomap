@@ -423,7 +423,7 @@
       gap: 6px;
     }
     .map-type-group {
-      display: flex;
+      display: none; /* 기본 숨김 */
       gap: 4px;
       background: rgba(26,26,34,0.92);
       border: 1px solid var(--border);
@@ -685,17 +685,25 @@
 
     <!-- 지도 컨트롤 버튼 -->
     <div id="map-controls">
-      <!-- 지도 타입 -->
-      <div class="map-type-group">
-        <button class="map-type-btn active" id="type-normal"  onclick="setMapType('normal')">기본</button>
-        <button class="map-type-btn"        id="type-terrain" onclick="setMapType('terrain')">지형</button>
+      <!-- 지도 타입 (토글로 표시) -->
+      <div class="map-type-group" id="map-type-group">
+        <button class="map-type-btn active" id="type-normal"    onclick="setMapType('normal')">기본</button>
+        <button class="map-type-btn"        id="type-terrain"   onclick="setMapType('terrain')">지형</button>
         <button class="map-type-btn"        id="type-cadastral" onclick="setMapType('cadastral')">지적</button>
       </div>
       <!-- 액션 버튼 -->
       <div class="map-action-group">
+        <button class="map-action-btn" onclick="toggleMapTypeGroup()">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="1.5" width="5" height="5" rx="1"/><rect x="9.5" y="1.5" width="5" height="5" rx="1"/><rect x="1.5" y="9.5" width="5" height="5" rx="1"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></svg>
+          지도 타입
+        </button>
         <button class="map-action-btn" id="cluster-toggle-btn" onclick="toggleCluster()">
           <svg viewBox="0 0 16 16" fill="currentColor"><circle cx="4" cy="4" r="2.5"/><circle cx="12" cy="4" r="2.5"/><circle cx="4" cy="12" r="2.5"/><circle cx="12" cy="12" r="2.5"/><circle cx="8" cy="8" r="2"/></svg>
           클러스터 ON
+        </button>
+        <button class="map-action-btn" onclick="saveMapAsPng()">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2"/></svg>
+          PNG 저장
         </button>
         <button class="map-action-btn danger" onclick="resetMarkers()">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M6 4V2.5h4V4M6.5 7v5M9.5 7v5M4 4l.8 8.5a1 1 0 001 .9h4.4a1 1 0 001-.9L12 4"/></svg>
@@ -749,6 +757,7 @@ let map = null;
 let markers = [];
 let infowindows = [];
 let activeIdx = -1;
+let selectedMarkerIdx = -1; // 선택된 마커 인덱스 (-1 = 없음)
 let parsedData = [];
 let roadview = null;
 let rvClient = null;
@@ -829,7 +838,10 @@ function createMap() {
       fontFamily: "'Noto Sans KR', sans-serif"
     }]
   });
-  // 클러스터 클릭 이벤트
+  // 지도 빈 공간 클릭 → 모든 마커 다시 표시
+  kakao.maps.event.addListener(map, 'click', () => {
+    if (selectedMarkerIdx !== -1) showAllMarkers();
+  });
   kakao.maps.event.addListener(clusterer, 'clusterclick', function(cluster) {
     const level = map.getLevel() - 2;
     map.setLevel(level < 1 ? 1 : level, { anchor: cluster.getCenter(), animate: true });
@@ -1076,6 +1088,13 @@ function retrySkip() {
   showNextRetry();
 }
 
+/* ── 지도 타입 패널 토글 ── */
+function toggleMapTypeGroup() {
+  const group = document.getElementById('map-type-group');
+  const isVisible = group.style.display === 'flex';
+  group.style.display = isVisible ? 'none' : 'flex';
+}
+
 /* ── 지도 타입 ── */
 function setMapType(type) {
   if (!map) return;
@@ -1121,6 +1140,55 @@ function toggleCluster() {
   }
 }
 
+/* ── PNG 저장 (Static Map API) ── */
+function saveMapAsPng() {
+  if (!map) { toast('지도를 먼저 로드해 주세요.', 'error'); return; }
+
+  const key = document.getElementById('api-key-input').value.trim();
+  const center = map.getCenter();
+  const level  = map.getLevel();
+  const mapWrap = document.getElementById('map-wrap');
+  const w = mapWrap.offsetWidth;
+  const h = mapWrap.offsetHeight;
+
+  // Static Map API URL 구성
+  let url = `https://dapi.kakao.com/v2/maps/staticmap`
+    + `?appkey=${key}`
+    + `&center=${center.getLng()},${center.getLat()}`
+    + `&level=${level}`
+    + `&width=${w}&height=${h}`;
+
+  // 현재 지도 타입 오버레이 반영
+  if (currentMapType === 'terrain')   url += '&map_type=terrain_on';
+  if (currentMapType === 'cadastral') url += '&map_type=cadastral_layer_on';
+
+  // 마커 추가 (최대 100개 제한)
+  const MAX_MARKERS = 100;
+  const visibleMarkers = markers.slice(0, MAX_MARKERS);
+  if (visibleMarkers.length > 0) {
+    const markerParams = visibleMarkers.map(m => {
+      const pos = m.getPosition();
+      return `${pos.getLng()},${pos.getLat()}`;
+    }).join('|');
+    url += `&markers=color:red|size:medium|${markerParams}`;
+  }
+
+  // 링크 클릭으로 다운로드
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `kakaomap_${new Date().toISOString().slice(0,19).replace(/[:.]/g,'-')}.png`;
+  a.target = '_blank';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  if (markers.length > MAX_MARKERS) {
+    toast(`마커가 많아 상위 ${MAX_MARKERS}개만 표시됩니다.`, 'info');
+  } else {
+    toast('PNG 저장 중...', 'success');
+  }
+}
+
 /* ── 마커 초기화 ── */
 function resetMarkers() {
   if (!map) return;
@@ -1129,6 +1197,7 @@ function resetMarkers() {
   if (clusterer) clusterer.clear();
   markers = []; infowindows = [];
   parsedData = []; geocodeResults = {};
+  selectedMarkerIdx = -1;
 
   document.getElementById('marker-list').innerHTML =
     '<div class="empty-state">엑셀 파일을 업로드하면<br>마커 목록이 여기에 표시됩니다.</div>';
@@ -1192,14 +1261,17 @@ function renderMarkers() {
       removable: true
     });
 
-    kakao.maps.event.addListener(marker, 'click', () => {
-      infowindows.forEach(w => w.close());
-      iw.open(map, marker);
-      setActive(i);
-    });
-
     markers.push(marker);
     infowindows.push(iw);
+    const markerIdx = markers.length - 1;
+
+    kakao.maps.event.addListener(marker, 'click', () => {
+      infowindows.forEach(w => w.close());
+      infowindows[markerIdx].open(map, marker);
+      setActive(i);
+      focusMarker(markerIdx);
+    });
+
     ok++;
     addListItem(listEl, i, name, lat, lng, false, '');
   });
@@ -1239,6 +1311,7 @@ function addListItem(listEl, idx, name, lat, lng, hasError, errMsg) {
         map.panTo(markers[mi].getPosition());
         infowindows[mi].open(map, markers[mi]);
         setActive(idx);
+        focusMarker(mi);
       }
     };
   }
@@ -1260,6 +1333,67 @@ function getMarkerIndexByDataIdx(dataIdx) {
     if (valid) mi++;
   }
   return mi < markers.length ? mi : -1;
+}
+
+/* ── 마커 포커스 / 전체 표시 ── */
+function focusMarker(markerIdx) {
+  if (selectedMarkerIdx === markerIdx) return; // 같은 마커 재클릭 무시
+  selectedMarkerIdx = markerIdx;
+
+  // 클러스터 OFF 후 개별 제어
+  if (clusterer) clusterer.clear();
+
+  markers.forEach((m, idx) => {
+    if (idx === markerIdx) {
+      m.setMap(map);  // 선택된 마커만 표시
+    } else {
+      m.setMap(null); // 나머지 숨김
+    }
+  });
+
+  // 사이드 목록 흐림 처리
+  document.querySelectorAll('.marker-item').forEach(el => {
+    el.style.opacity = el.id === `item-${getDataIdxByMarkerIdx(markerIdx)}` ? '1' : '0.3';
+  });
+}
+
+function showAllMarkers() {
+  selectedMarkerIdx = -1;
+  infowindows.forEach(w => w.close());
+
+  if (clusterer && clusterEnabled) {
+    clusterer.addMarkers(markers);
+  } else {
+    markers.forEach(m => m.setMap(map));
+  }
+
+  // 사이드 목록 흐림 해제
+  document.querySelectorAll('.marker-item').forEach(el => {
+    el.style.opacity = '1';
+  });
+
+  document.querySelectorAll('.marker-item').forEach(el => el.classList.remove('active'));
+  activeIdx = -1;
+}
+
+// markerIdx → dataIdx 역변환
+function getDataIdxByMarkerIdx(markerIdx) {
+  let mi = 0;
+  for (let i = 0; i < parsedData.length; i++) {
+    let valid = false;
+    if (currentMode === 'addr') {
+      valid = !!(geocodeResults[i]);
+    } else {
+      const latCol = document.getElementById('col-lat').value;
+      const lngCol = document.getElementById('col-lng').value;
+      valid = !isNaN(parseFloat(parsedData[i][latCol])) && !isNaN(parseFloat(parsedData[i][lngCol]));
+    }
+    if (valid) {
+      if (mi === markerIdx) return i;
+      mi++;
+    }
+  }
+  return -1;
 }
 
 function setActive(idx) {
