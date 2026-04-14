@@ -464,6 +464,10 @@ function applyMarkers() {
    - done===total 조건 경쟁 없음
    - API 응답 전 다음 요청 보내지 않아 속도 제한 대응
 ══════════════════════════════════════ */
+/* ══════════════════════════════════════
+   주소 지오코딩 — async/await 순차 처리
+   (429 Too Many Requests 에러 해결을 위해 sleep 딜레이 추가)
+══════════════════════════════════════ */
 function startGeocoding() {
   const addrColVal = document.getElementById('col-addr').value;
   if (addrColVal === '') { toast('주소 컬럼을 선택해 주세요.', 'error'); return; }
@@ -501,12 +505,17 @@ function startGeocoding() {
     });
   });
 
-  // 순차 실행 — 이전 응답 완료 후 다음 요청
+  // 딜레이(Sleep) 함수 생성
+  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  // 순차 실행 — 이전 응답 완료 후 약간 대기한 뒤 다음 요청
   (async () => {
     updateProgress();
     for (let i = 0; i < total; i++) {
       await geocodeOne(i);
+      await sleep(50); // 50ms 대기 (카카오 API 초당 요청 제한 우회)
     }
+    
     statusEl.textContent = '변환 완료!';
     document.getElementById('apply-btn').disabled = false;
     if (failedItems.length === 0) {
