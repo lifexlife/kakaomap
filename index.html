@@ -459,8 +459,7 @@ function applyMarkers() {
 }
 
 /* ══════════════════════════════════════
-   주소 지오코딩 — async/await 순차 처리
-   (429 에러 완전 해결을 위해 sleep 딜레이 200ms로 증가)
+   주소 지오코딩 (0.5초 딜레이 추가 버전)
 ══════════════════════════════════════ */
 function startGeocoding() {
   const addrColVal = document.getElementById('col-addr').value;
@@ -481,7 +480,6 @@ function startGeocoding() {
     statusEl.textContent = `주소 변환 중... ${done} / ${total}`;
   };
 
-  // 단일 주소를 Promise로 래핑
   const geocodeOne = (idx) => new Promise(resolve => {
     const addr = String(parsedData[idx][addrColVal] || '').trim();
     if (!addr) {
@@ -499,19 +497,18 @@ function startGeocoding() {
     });
   });
 
-  // 딜레이(Sleep) 함수 생성
   const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-  // 순차 실행 — 이전 응답 완료 후 0.2초 대기한 뒤 다음 요청
   (async () => {
     updateProgress();
     for (let i = 0; i < total; i++) {
       await geocodeOne(i);
-      await sleep(200); // 50 -> 200으로 대기 시간 대폭 늘림
+      await sleep(500); // 0.5초 대기 (서버 과부하 방지)
     }
     
     statusEl.textContent = '변환 완료!';
     document.getElementById('apply-btn').disabled = false;
+    
     if (failedItems.length === 0) {
       renderMarkers();
     } else {
@@ -520,6 +517,7 @@ function startGeocoding() {
     }
   })();
 }
+
 /* ── 재입력 모달 ── */
 function showNextRetry() {
   if (retryQueue.length === 0) { closeRetryModal(); renderMarkers(); return; }
@@ -544,14 +542,12 @@ function closeRetryModal() {
   document.getElementById('retry-modal').style.display = 'none';
 }
 
-// 이 항목만 건너뛰기
 function retrySkip() {
   geocodeResults[retryQueue[0].idx] = null;
   retryQueue.shift();
   showNextRetry();
 }
 
-// 남은 모든 항목 건너뛰기
 function retrySkipAll() {
   retryQueue.forEach(item => { geocodeResults[item.idx] = null; });
   retryQueue = [];
@@ -576,7 +572,6 @@ function retryConfirm() {
   });
 }
 
-// 자동완성
 let suggestTimer = null;
 document.getElementById('retry-input').addEventListener('input', function () {
   clearTimeout(suggestTimer);
@@ -617,16 +612,11 @@ function toggleMapTypeGroup() {
   g.style.display = g.style.display === 'flex' ? 'none' : 'flex';
 }
 
-/* ── 지도 타입 변경 ── */
 function setMapType(type) {
   if (!map) return;
-
-  // 기존 오버레이 모두 제거
   map.removeOverlayMapTypeId(kakao.maps.MapTypeId.USE_DISTRICT);
   map.removeOverlayMapTypeId(kakao.maps.MapTypeId.TERRAIN);
   if (roadviewOverlay) { roadviewOverlay.setMap(null); roadviewOverlay = null; }
-
-  // 기본 지도 타입 복원
   map.setMapTypeId(kakao.maps.MapTypeId.ROADMAP);
 
   if (type === 'terrain') {
@@ -634,7 +624,6 @@ function setMapType(type) {
   } else if (type === 'cadastral') {
     map.addOverlayMapTypeId(kakao.maps.MapTypeId.USE_DISTRICT);
   } else if (type === 'roadview') {
-    // 로드뷰 오버레이: 지도에 로드뷰 촬영 경로(파란 선) 표시
     roadviewOverlay = new kakao.maps.RoadviewOverlay();
     roadviewOverlay.setMap(map);
   }
@@ -645,7 +634,6 @@ function setMapType(type) {
   });
 }
 
-/* ── 클러스터 토글 ── */
 function toggleCluster() {
   if (!clusterer) return;
   clusterEnabled = !clusterEnabled;
@@ -663,7 +651,6 @@ function toggleCluster() {
   }
 }
 
-/* ── 마커 초기화 ── */
 function resetMarkers() {
   if (!map) return;
   markers.forEach(m => m.setMap(null));
@@ -776,7 +763,6 @@ function addListItem(listEl, idx, name, lat, lng, hasError, errMsg) {
   listEl.appendChild(item);
 }
 
-/* ── 인덱스 변환 헬퍼 ── */
 function isValidDataIdx(i) {
   if (currentMode === 'addr') return !!(geocodeResults[i]);
   const lat = parseFloat(parsedData[i]?.[document.getElementById('col-lat').value]);
@@ -798,7 +784,6 @@ function getDataIdxByMarkerIdx(mIdx) {
   return -1;
 }
 
-/* ── 마커 포커스 / 전체 표시 ── */
 function focusMarker(mIdx) {
   if (selectedMarkerIdx === mIdx) return;
   selectedMarkerIdx = mIdx;
@@ -826,7 +811,6 @@ function setActive(idx) {
   activeIdx = idx;
 }
 
-/* ── 로드뷰 ── */
 function openRoadview(lat, lng, name) {
   const rvDiv   = document.getElementById('roadview');
   const unavail = document.getElementById('roadview-unavail');
@@ -835,7 +819,6 @@ function openRoadview(lat, lng, name) {
   unavail.style.display = 'none';
   rvDiv.style.display = 'block';
 
-  // 매번 새 인스턴스 → 위치 갱신 이슈 완전 해소
   roadviewObj = new kakao.maps.Roadview(rvDiv);
   if (!rvClient) rvClient = new kakao.maps.RoadviewClient();
 
