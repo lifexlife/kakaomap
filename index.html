@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>카카오맵 엑셀 마커</title>
+  <title>카카오맵 엑셀 마커 V0.5 (안정화 버전)</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
@@ -316,6 +316,9 @@ let clusterEnabled = true;
 let currentMapType = 'normal';
 let roadviewOverlay = null;
 
+// Geocoder 인스턴스 재사용을 위해 전역 변수로 관리
+let geocoderInstance = null;
+
 /* ── 토스트 ── */
 function toast(msg, type = 'info') {
   const el = document.getElementById('toast');
@@ -378,12 +381,10 @@ function createMap() {
     }]
   });
 
-  // 지도 빈 공간 클릭 → 전체 마커 복원
   kakao.maps.event.addListener(map, 'click', () => {
     if (selectedMarkerIdx !== -1) showAllMarkers();
   });
 
-  // 클러스터 클릭 → 줌인
   kakao.maps.event.addListener(clusterer, 'clusterclick', cluster => {
     map.setLevel(Math.max(1, map.getLevel() - 2), { anchor: cluster.getCenter(), animate: true });
   });
@@ -459,14 +460,16 @@ function applyMarkers() {
 }
 
 /* ══════════════════════════════════════
-   주소 지오코딩 — async/await 순차 처리
-   (핵심 수정: setTimeout 병렬 방식 → 순차 Promise 체인)
-   - done===total 조건 경쟁 없음
-   - API 응답 전 다음 요청 보내지 않아 속도 제한 대응
+   주소 지오코딩 — 안정화 로직 적용
 ══════════════════════════════════════ */
 function startGeocoding() {
   const addrColVal = document.getElementById('col-addr').value;
   if (addrColVal === '') { toast('주소 컬럼을 선택해 주세요.', 'error'); return; }
+
+  // Geocoder 인스턴스 싱글톤 유지
+  if (!geocoderInstance) {
+    geocoderInstance = new kakao.maps.services.Geocoder();
+  }
 
   geocodeResults = {};
   const total = parsedData.length;
@@ -483,25 +486,27 @@ function startGeocoding() {
     statusEl.textContent = `주소 변환 중... ${done} / ${total}`;
   };
 
-  // 단일 주소를 Promise로 래핑
   const geocodeOne = (idx) => new Promise(resolve => {
     const addr = String(parsedData[idx][addrColVal] || '').trim();
     if (!addr) {
       geocodeResults[idx] = null;
       done++; updateProgress(); resolve(); return;
     }
-    new kakao.maps.services.Geocoder().addressSearch(addr, (result, st) => {
-      if (st === kakao.maps.services.Status.OK && result.length > 0) {
-        geocodeResults[idx] = { lat: parseFloat(result[0].y), lng: parseFloat(result[0].x) };
-      } else {
-        geocodeResults[idx] = null;
-        failedItems.push({ idx, originalAddr: addr });
-      }
-      done++; updateProgress(); resolve();
-    });
+
+    // API 과부하 방지를 위한 100ms 지연 시간 부여
+    setTimeout(() => {
+      geocoderInstance.addressSearch(addr, (result, st) => {
+        if (st === kakao.maps.services.Status.OK && result.length > 0) {
+          geocodeResults[idx] = { lat: parseFloat(result[0].y), lng: parseFloat(result[0].x) };
+        } else {
+          geocodeResults[idx] = null;
+          failedItems.push({ idx, originalAddr: addr });
+        }
+        done++; updateProgress(); resolve();
+      });
+    }, 100); 
   });
 
-  // 순차 실행 — 이전 응답 완료 후 다음 요청
   (async () => {
     updateProgress();
     for (let i = 0; i < total; i++) {
@@ -542,14 +547,12 @@ function closeRetryModal() {
   document.getElementById('retry-modal').style.display = 'none';
 }
 
-// 이 항목만 건너뛰기
 function retrySkip() {
   geocodeResults[retryQueue[0].idx] = null;
   retryQueue.shift();
   showNextRetry();
 }
 
-// 남은 모든 항목 건너뛰기
 function retrySkipAll() {
   retryQueue.forEach(item => { geocodeResults[item.idx] = null; });
   retryQueue = [];
@@ -562,7 +565,7 @@ function retryConfirm() {
   const addr = document.getElementById('retry-input').value.trim();
   if (!addr) { toast('주소를 입력해 주세요.', 'error'); return; }
   const item = retryQueue[0];
-  new kakao.maps.services.Geocoder().addressSearch(addr, (result, st) => {
+  geocoderInstance.addressSearch(addr, (result, st) => {
     if (st === kakao.maps.services.Status.OK && result.length > 0) {
       geocodeResults[item.idx] = { lat: parseFloat(result[0].y), lng: parseFloat(result[0].x) };
       retryQueue.shift();
@@ -574,7 +577,6 @@ function retryConfirm() {
   });
 }
 
-// 자동완성
 let suggestTimer = null;
 document.getElementById('retry-input').addEventListener('input', function () {
   clearTimeout(suggestTimer);
@@ -586,7 +588,7 @@ document.getElementById('retry-input').addEventListener('keydown', e => { if (e.
 
 function fetchSuggestions(query) {
   if (!window.kakao || !kakao.maps.services) return;
-  new kakao.maps.services.Geocoder().addressSearch(query, (result, st) => {
+  geocoderInstance.addressSearch(query, (result, st) => {
     const sugBox = document.getElementById('retry-suggest');
     if (st !== kakao.maps.services.Status.OK || result.length === 0) { sugBox.style.display = 'none'; return; }
     sugBox.innerHTML = result.slice(0, 5).map((r, i) => `
@@ -609,30 +611,23 @@ function selectSuggest(i) {
   showNextRetry();
 }
 
-/* ── 지도 타입 토글 ── */
+/* ── 지도 컨트롤 ── */
 function toggleMapTypeGroup() {
   const g = document.getElementById('map-type-group');
   g.style.display = g.style.display === 'flex' ? 'none' : 'flex';
 }
 
-/* ── 지도 타입 변경 ── */
 function setMapType(type) {
   if (!map) return;
-
-  // 기존 오버레이 모두 제거
   map.removeOverlayMapTypeId(kakao.maps.MapTypeId.USE_DISTRICT);
   map.removeOverlayMapTypeId(kakao.maps.MapTypeId.TERRAIN);
   if (roadviewOverlay) { roadviewOverlay.setMap(null); roadviewOverlay = null; }
 
-  // 기본 지도 타입 복원
   map.setMapTypeId(kakao.maps.MapTypeId.ROADMAP);
 
-  if (type === 'terrain') {
-    map.addOverlayMapTypeId(kakao.maps.MapTypeId.TERRAIN);
-  } else if (type === 'cadastral') {
-    map.addOverlayMapTypeId(kakao.maps.MapTypeId.USE_DISTRICT);
-  } else if (type === 'roadview') {
-    // 로드뷰 오버레이: 지도에 로드뷰 촬영 경로(파란 선) 표시
+  if (type === 'terrain') map.addOverlayMapTypeId(kakao.maps.MapTypeId.TERRAIN);
+  else if (type === 'cadastral') map.addOverlayMapTypeId(kakao.maps.MapTypeId.USE_DISTRICT);
+  else if (type === 'roadview') {
     roadviewOverlay = new kakao.maps.RoadviewOverlay();
     roadviewOverlay.setMap(map);
   }
@@ -643,7 +638,6 @@ function setMapType(type) {
   });
 }
 
-/* ── 클러스터 토글 ── */
 function toggleCluster() {
   if (!clusterer) return;
   clusterEnabled = !clusterEnabled;
@@ -661,7 +655,6 @@ function toggleCluster() {
   }
 }
 
-/* ── 마커 초기화 ── */
 function resetMarkers() {
   if (!map) return;
   markers.forEach(m => m.setMap(null));
@@ -682,9 +675,7 @@ function resetMarkers() {
   toast('마커를 초기화했습니다.', 'info');
 }
 
-/* ══════════════════════════════════════
-   마커 렌더링
-══════════════════════════════════════ */
+/* ── 마커 렌더링 ── */
 function renderMarkers() {
   closeRetryModal();
   document.getElementById('geocode-progress').style.display = 'none';
@@ -774,7 +765,6 @@ function addListItem(listEl, idx, name, lat, lng, hasError, errMsg) {
   listEl.appendChild(item);
 }
 
-/* ── 인덱스 변환 헬퍼 ── */
 function isValidDataIdx(i) {
   if (currentMode === 'addr') return !!(geocodeResults[i]);
   const lat = parseFloat(parsedData[i]?.[document.getElementById('col-lat').value]);
@@ -796,7 +786,6 @@ function getDataIdxByMarkerIdx(mIdx) {
   return -1;
 }
 
-/* ── 마커 포커스 / 전체 표시 ── */
 function focusMarker(mIdx) {
   if (selectedMarkerIdx === mIdx) return;
   selectedMarkerIdx = mIdx;
@@ -833,7 +822,6 @@ function openRoadview(lat, lng, name) {
   unavail.style.display = 'none';
   rvDiv.style.display = 'block';
 
-  // 매번 새 인스턴스 → 위치 갱신 이슈 완전 해소
   roadviewObj = new kakao.maps.Roadview(rvDiv);
   if (!rvClient) rvClient = new kakao.maps.RoadviewClient();
 
