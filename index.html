@@ -460,13 +460,7 @@ function applyMarkers() {
 
 /* ══════════════════════════════════════
    주소 지오코딩 — async/await 순차 처리
-   (핵심 수정: setTimeout 병렬 방식 → 순차 Promise 체인)
-   - done===total 조건 경쟁 없음
-   - API 응답 전 다음 요청 보내지 않아 속도 제한 대응
-══════════════════════════════════════ */
-/* ══════════════════════════════════════
-   주소 지오코딩 — async/await 순차 처리
-   (429 Too Many Requests 에러 해결을 위해 sleep 딜레이 추가)
+   (429 에러 완전 해결을 위해 sleep 딜레이 200ms로 증가)
 ══════════════════════════════════════ */
 function startGeocoding() {
   const addrColVal = document.getElementById('col-addr').value;
@@ -508,12 +502,12 @@ function startGeocoding() {
   // 딜레이(Sleep) 함수 생성
   const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-  // 순차 실행 — 이전 응답 완료 후 약간 대기한 뒤 다음 요청
+  // 순차 실행 — 이전 응답 완료 후 0.2초 대기한 뒤 다음 요청
   (async () => {
     updateProgress();
     for (let i = 0; i < total; i++) {
       await geocodeOne(i);
-      await sleep(50); // 50ms 대기 (카카오 API 초당 요청 제한 우회)
+      await sleep(200); // 50 -> 200으로 대기 시간 대폭 늘림
     }
     
     statusEl.textContent = '변환 완료!';
@@ -526,7 +520,6 @@ function startGeocoding() {
     }
   })();
 }
-
 /* ── 재입력 모달 ── */
 function showNextRetry() {
   if (retryQueue.length === 0) { closeRetryModal(); renderMarkers(); return; }
