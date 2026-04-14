@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>카카오맵 엑셀 마커 V0.4.2 (Anti-429)</title>
+  <title>카카오맵 엑셀 마커</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
@@ -14,190 +14,844 @@
       --border: rgba(255,255,255,0.08); --text: #f0ede8; --muted: #8b8a99;
     }
     body { font-family:'Noto Sans KR',sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; overflow:hidden; }
-    header { display:flex; align-items:center; gap:14px; padding:0 20px; height:52px; background:var(--surface); border-bottom:1px solid var(--border); flex-shrink:0; }
-    #api-key-input { background:var(--surface2); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px; padding:5px 10px; width:240px; outline:none; }
-    #load-map-btn { background:var(--kakao); color:var(--kakao-dark); border:none; border-radius:6px; font-size:12px; font-weight:700; padding:5px 14px; cursor:pointer; }
+
+    /* ── 헤더 ── */
+    header { display:flex; align-items:center; gap:14px; padding:0 20px; height:52px; background:var(--surface); border-bottom:1px solid var(--border); flex-shrink:0; z-index:10; }
+    .logo { display:flex; align-items:center; gap:8px; }
+    .logo-dot { width:24px; height:24px; border-radius:6px; background:var(--kakao); display:flex; align-items:center; justify-content:center; }
+    .logo-dot svg { width:14px; height:14px; }
+    .logo-text { font-size:14px; font-weight:700; letter-spacing:-0.3px; }
+    .logo-text span { color:var(--kakao); }
+    .header-sep { flex:1; }
+    #api-key-wrap { display:flex; align-items:center; gap:8px; }
+    #api-key-wrap label { font-size:12px; color:var(--muted); white-space:nowrap; }
+    #api-key-input { background:var(--surface2); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px; padding:5px 10px; width:240px; font-family:'Courier New',monospace; outline:none; transition:border-color .2s; }
+    #api-key-input:focus { border-color:var(--kakao); }
+    #load-map-btn { background:var(--kakao); color:var(--kakao-dark); border:none; border-radius:6px; font-size:12px; font-weight:700; padding:5px 14px; cursor:pointer; font-family:'Noto Sans KR',sans-serif; transition:opacity .15s,transform .1s; }
+    #load-map-btn:hover { opacity:.85; } #load-map-btn:active { transform:scale(.97); }
+
+    /* ── 레이아웃 ── */
     main { flex:1; display:flex; overflow:hidden; }
     aside { width:300px; flex-shrink:0; background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
     .panel-section { padding:16px; border-bottom:1px solid var(--border); }
-    .panel-title { font-size:11px; font-weight:700; color:var(--muted); margin-bottom:12px; text-transform:uppercase; }
-    .upload-zone { border:1.5px dashed var(--border); border-radius:10px; padding:20px; text-align:center; cursor:pointer; }
+    .panel-title { font-size:11px; font-weight:700; letter-spacing:.8px; text-transform:uppercase; color:var(--muted); margin-bottom:12px; }
+
+    /* 파일 업로드 */
+    .upload-zone { border:1.5px dashed var(--border); border-radius:10px; padding:20px; text-align:center; cursor:pointer; transition:border-color .2s,background .2s; }
+    .upload-zone:hover { border-color:var(--kakao); background:rgba(254,229,0,.03); }
+    .upload-zone.dragover { border-color:var(--kakao); background:rgba(254,229,0,.07); }
+    .upload-icon { font-size:28px; margin-bottom:8px; }
+    .upload-text { font-size:13px; color:var(--muted); line-height:1.5; }
+    .upload-text strong { color:var(--text); display:block; margin-bottom:2px; }
     #file-input { display:none; }
+
+    /* 컬럼 매핑 */
+    .mode-tab { flex:1; background:var(--surface2); border:1px solid var(--border); border-radius:6px; color:var(--muted); font-size:12px; font-weight:500; padding:6px 8px; cursor:pointer; font-family:'Noto Sans KR',sans-serif; transition:all .15s; }
+    .mode-tab.active { background:rgba(254,229,0,.15); border-color:rgba(254,229,0,.4); color:var(--kakao); }
     .mapping-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
-    .mapping-row label { font-size:11px; color:var(--muted); width:40px; }
-    .mapping-row select { flex:1; background:var(--surface2); border:1px solid var(--border); color:var(--text); font-size:12px; padding:4px; border-radius:4px; }
-    .apply-btn { width:100%; background:var(--kakao); color:var(--kakao-dark); border:none; border-radius:7px; font-size:13px; font-weight:700; padding:10px; cursor:pointer; margin-top:10px; }
-    .apply-btn:disabled { background: #444; color: #888; cursor: not-allowed; }
-    .geocode-progress { margin-top:10px; display:none; }
-    .geocode-bar-wrap { height:4px; background:var(--surface2); border-radius:2px; overflow:hidden; }
-    .geocode-bar { height:100%; width:0%; background:var(--kakao); transition:width 0.2s; }
-    .geocode-status { font-size:10px; color:var(--muted); margin-top:4px; }
+    .mapping-row label { font-size:12px; color:var(--muted); width:52px; flex-shrink:0; }
+    .mapping-row select { flex:1; background:var(--surface2); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px; padding:5px 8px; outline:none; font-family:'Noto Sans KR',sans-serif; transition:border-color .2s; }
+    .mapping-row select:focus { border-color:var(--kakao); }
+    .apply-btn { width:100%; background:var(--kakao); color:var(--kakao-dark); border:none; border-radius:7px; font-size:13px; font-weight:700; padding:9px; cursor:pointer; font-family:'Noto Sans KR',sans-serif; margin-top:4px; transition:opacity .15s; }
+    .apply-btn:hover { opacity:.85; } .apply-btn:disabled { opacity:.35; cursor:not-allowed; }
+
+    /* 지오코딩 진행바 */
+    .geocode-progress { margin-top:8px; }
+    .geocode-bar-wrap { height:4px; background:var(--surface2); border-radius:2px; overflow:hidden; margin-bottom:5px; }
+    .geocode-bar { height:100%; width:0%; background:var(--kakao); border-radius:2px; transition:width .2s; }
+    .geocode-status { font-size:11px; color:var(--muted); }
+
+    /* 통계 */
+    .stats-row { display:flex; gap:8px; }
+    .stat-chip { flex:1; background:var(--surface2); border-radius:7px; padding:8px 10px; text-align:center; }
+    .stat-num { font-size:20px; font-weight:700; color:var(--kakao); }
+    .stat-lbl { font-size:10px; color:var(--muted); margin-top:1px; }
+
+    /* 마커 목록 */
+    .marker-list { flex:1; overflow-y:auto; padding:8px; }
+    .marker-list::-webkit-scrollbar { width:4px; }
+    .marker-list::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+    .marker-item { display:flex; align-items:flex-start; gap:10px; padding:9px 10px; border-radius:8px; cursor:pointer; transition:background .15s,opacity .2s; border:1px solid transparent; }
+    .marker-item:hover { background:var(--surface2); }
+    .marker-item.active { background:rgba(254,229,0,.08); border-color:rgba(254,229,0,.25); }
+    .marker-num { width:22px; height:22px; border-radius:50%; background:var(--kakao); color:var(--kakao-dark); font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
+    .marker-info { flex:1; min-width:0; }
+    .marker-name { font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .marker-coords { font-size:11px; color:var(--muted); margin-top:2px; font-family:'Courier New',monospace; }
+    .empty-state { text-align:center; padding:40px 20px; color:var(--muted); font-size:13px; line-height:1.7; }
+
+    /* 지도 */
     #map-wrap { flex:1; position:relative; }
     #map { width:100%; height:100%; }
-    .marker-list { flex:1; overflow-y:auto; padding:8px; }
-    #toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--surface); border:1px solid var(--border); padding:10px 20px; border-radius:8px; z-index:1000; opacity:0; transition:0.3s; pointer-events:none; font-size:13px; }
+    #map-placeholder { position:absolute; inset:0; background:var(--surface2); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; z-index:5; }
+    .placeholder-icon { font-size:48px; opacity:.3; }
+    .placeholder-text { font-size:14px; color:var(--muted); text-align:center; line-height:1.7; }
+
+    /* 토스트 */
+    #toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 18px; font-size:13px; z-index:9999; opacity:0; transition:opacity .3s; pointer-events:none; white-space:nowrap; }
     #toast.show { opacity:1; }
+    #toast.error { border-color:#e24b4a; color:#f09595; }
+    #toast.success { border-color:rgba(254,229,0,.5); color:var(--kakao); }
+
+    /* 지도 컨트롤 */
+    #map-controls { position:absolute; top:12px; left:12px; z-index:10; display:flex; flex-direction:column; gap:6px; }
+    .map-type-group { display:none; gap:4px; background:rgba(26,26,34,0.92); border:1px solid var(--border); border-radius:8px; padding:4px; backdrop-filter:blur(6px); }
+    .map-type-btn { background:transparent; border:none; border-radius:5px; color:var(--muted); font-size:11px; font-weight:500; padding:5px 9px; cursor:pointer; font-family:'Noto Sans KR',sans-serif; transition:all .15s; white-space:nowrap; }
+    .map-type-btn:hover { background:var(--surface2); color:var(--text); }
+    .map-type-btn.active { background:var(--kakao); color:var(--kakao-dark); }
+    .map-action-group { display:flex; flex-direction:column; gap:4px; }
+    .map-action-btn { background:rgba(26,26,34,0.92); border:1px solid var(--border); border-radius:8px; color:var(--muted); font-size:11px; font-weight:500; padding:7px 10px; cursor:pointer; font-family:'Noto Sans KR',sans-serif; transition:all .15s; backdrop-filter:blur(6px); display:flex; align-items:center; gap:5px; white-space:nowrap; }
+    .map-action-btn:hover { border-color:rgba(254,229,0,.4); color:var(--text); }
+    .map-action-btn.danger:hover { border-color:#e24b4a; color:#f09595; }
+    .map-action-btn svg { width:13px; height:13px; flex-shrink:0; }
+
+    /* 로드뷰 패널 */
+    #roadview-panel { position:absolute; top:0; right:0; width:0; height:100%; background:var(--surface); z-index:20; overflow:hidden; transition:width .35s cubic-bezier(.4,0,.2,1); border-left:1px solid var(--border); display:flex; flex-direction:column; }
+    #roadview-panel.open { width:50%; }
+    #roadview-header { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-bottom:1px solid var(--border); flex-shrink:0; }
+    #roadview-title { font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:80%; }
+    #roadview-close { background:var(--surface2); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px; padding:4px 10px; cursor:pointer; font-family:'Noto Sans KR',sans-serif; transition:background .15s; }
+    #roadview-close:hover { background:rgba(255,255,255,.1); }
+    #roadview { flex:1; }
+    #roadview-unavail { display:none; flex-direction:column; align-items:center; justify-content:center; height:100%; gap:10px; color:var(--muted); font-size:13px; }
+    #roadview-unavail .rv-icon { font-size:36px; opacity:.4; }
+    .rv-btn { display:inline-block; margin-top:6px; background:#FEE500; color:#3A1D1D; border:none; border-radius:5px; font-size:11px; font-weight:700; padding:4px 10px; cursor:pointer; font-family:'Noto Sans KR',sans-serif; }
+
+    /* 재입력 모달 */
+    #retry-modal { position:fixed; inset:0; z-index:1000; display:flex; align-items:center; justify-content:center; }
+    #retry-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.6); backdrop-filter:blur(2px); }
+    #retry-box { position:relative; z-index:1; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:24px; width:480px; max-width:90vw; box-shadow:0 24px 60px rgba(0,0,0,.5); }
+    #retry-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+    #retry-title { font-size:15px; font-weight:700; }
+    #retry-count { font-size:11px; color:var(--muted); background:var(--surface2); border-radius:20px; padding:3px 10px; }
+    #retry-original { font-size:12px; color:var(--muted); background:var(--surface2); border-radius:7px; padding:8px 12px; margin-bottom:12px; line-height:1.5; }
+    #retry-original strong { color:#e24b4a; display:block; font-size:11px; margin-bottom:2px; }
+    #retry-input-wrap { position:relative; margin-bottom:14px; }
+    #retry-input { width:100%; background:var(--surface2); border:1.5px solid var(--border); border-radius:8px; color:var(--text); font-size:14px; padding:10px 14px; outline:none; font-family:'Noto Sans KR',sans-serif; transition:border-color .2s; }
+    #retry-input:focus { border-color:var(--kakao); }
+    #retry-suggest { position:absolute; top:calc(100% + 4px); left:0; right:0; background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow:hidden; z-index:10; max-height:180px; overflow-y:auto; }
+    .suggest-item { padding:9px 14px; font-size:13px; cursor:pointer; border-bottom:1px solid var(--border); transition:background .1s; }
+    .suggest-item:last-child { border-bottom:none; }
+    .suggest-item:hover { background:var(--surface2); }
+    .suggest-item .sug-addr { color:var(--text); }
+    .suggest-item .sug-road { font-size:11px; color:var(--muted); margin-top:2px; }
+    #retry-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    #retry-skip-btn { flex:1; background:transparent; border:1px solid var(--border); border-radius:8px; color:var(--muted); font-size:12px; font-weight:500; padding:10px 6px; cursor:pointer; font-family:'Noto Sans KR',sans-serif; transition:background .15s; white-space:nowrap; }
+    #retry-skip-btn:hover { background:var(--surface2); }
+    #retry-skip-all-btn { flex:1; background:transparent; border:1px solid #e24b4a; border-radius:8px; color:#f09595; font-size:12px; font-weight:500; padding:10px 6px; cursor:pointer; font-family:'Noto Sans KR',sans-serif; transition:background .15s; white-space:nowrap; }
+    #retry-skip-all-btn:hover { background:rgba(226,75,74,.12); }
+    #retry-confirm-btn { flex:2; background:var(--kakao); border:none; border-radius:8px; color:var(--kakao-dark); font-size:12px; font-weight:700; padding:10px 6px; cursor:pointer; font-family:'Noto Sans KR',sans-serif; transition:opacity .15s; white-space:nowrap; }
+    #retry-confirm-btn:hover { opacity:.85; }
+    #retry-progress-wrap { height:3px; background:var(--surface2); border-radius:2px; margin-top:16px; overflow:hidden; }
+    #retry-progress-bar { height:100%; background:var(--kakao); border-radius:2px; transition:width .3s; }
+
+    /* 엑셀 포맷 안내 */
+    .format-hint { background:var(--surface2); border-radius:8px; padding:10px 12px; font-size:11px; color:var(--muted); line-height:1.7; }
+    .format-hint code { background:rgba(254,229,0,.12); color:var(--kakao); border-radius:3px; padding:0 4px; font-size:10.5px; }
   </style>
 </head>
 <body>
 
 <header>
-  <div style="font-size:14px; font-weight:700;"><span>kakao</span>map · 엑셀 마커 V0.4.2</div>
-  <div style="flex:1;"></div>
-  <input type="text" id="api-key-input" placeholder="JavaScript 키 입력"/>
-  <button id="load-map-btn" onclick="initMap()">지도 로드</button>
+  <div class="logo">
+    <div class="logo-dot">
+      <svg viewBox="0 0 24 24" fill="#3A1D1D"><circle cx="12" cy="10" r="5"/><path d="M12 15 L9 21 L12 19 L15 21 Z"/></svg>
+    </div>
+    <div class="logo-text"><span>kakao</span>map · 엑셀 마커</div>
+  </div>
+  <div class="header-sep"></div>
+  <div id="api-key-wrap">
+    <label>JavaScript 키</label>
+    <input type="text" id="api-key-input" placeholder="발급받은 API 키 입력" autocomplete="off"/>
+    <button id="load-map-btn" onclick="initMap()">지도 로드</button>
+  </div>
 </header>
 
 <main>
   <aside>
     <div class="panel-section">
-      <div class="panel-title">파일 업로드</div>
-      <div class="upload-zone" onclick="document.getElementById('file-input').click()">
-        <div id="file-name-text" style="font-size:11px; color:var(--muted);">CSV/XLSX 파일을 선택하세요</div>
+      <div class="panel-title">엑셀 파일</div>
+      <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+        <div class="upload-icon">📊</div>
+        <div class="upload-text"><strong>파일을 클릭하거나 드래그</strong>.xlsx / .xls / .csv 지원</div>
       </div>
       <input type="file" id="file-input" accept=".xlsx,.xls,.csv">
     </div>
 
     <div class="panel-section" id="mapping-section" style="display:none;">
       <div class="panel-title">컬럼 매핑</div>
-      <div class="mapping-row"><label>이름</label><select id="col-name"></select></div>
-      <div class="mapping-row"><label>주소</label><select id="col-addr"></select></div>
-      
-      <div class="geocode-progress" id="geocode-progress">
-        <div class="geocode-bar-wrap"><div class="geocode-bar" id="geocode-bar"></div></div>
-        <div class="geocode-status" id="geocode-status-el">대기 중...</div>
+      <div style="display:flex;gap:6px;margin-bottom:12px;">
+        <button class="mode-tab active" id="tab-coords" onclick="switchMode('coords')">📍 위도/경도</button>
+        <button class="mode-tab" id="tab-addr" onclick="switchMode('addr')">🏠 주소</button>
       </div>
-      
-      <button class="apply-btn" id="apply-btn" onclick="applyMarkers()">마커 표시 시작</button>
+      <div class="mapping-row">
+        <label>이름</label>
+        <select id="col-name"><option value="">-- 선택 --</option></select>
+      </div>
+      <div id="mode-coords">
+        <div class="mapping-row"><label>위도</label><select id="col-lat"><option value="">-- 선택 --</option></select></div>
+        <div class="mapping-row"><label>경도</label><select id="col-lng"><option value="">-- 선택 --</option></select></div>
+      </div>
+      <div id="mode-addr" style="display:none;">
+        <div class="mapping-row"><label>주소</label><select id="col-addr"><option value="">-- 선택 --</option></select></div>
+        <div class="geocode-progress" id="geocode-progress" style="display:none;">
+          <div class="geocode-bar-wrap"><div class="geocode-bar" id="geocode-bar"></div></div>
+          <div class="geocode-status" id="geocode-status-el">변환 중...</div>
+        </div>
+      </div>
+      <button class="apply-btn" id="apply-btn" onclick="applyMarkers()">마커 표시</button>
     </div>
-    <div class="marker-list" id="marker-list"></div>
+
+    <div class="panel-section">
+      <div class="panel-title">엑셀 형식 예시</div>
+      <div class="format-hint">
+        첫 행은 헤더여야 합니다.<br><br>
+        <strong style="color:var(--text);font-size:11px;">📍 위도/경도 모드</strong><br>
+        <code>이름</code> <code>위도</code> <code>경도</code><br>
+        카카오판교 37.3952 127.1104<br><br>
+        <strong style="color:var(--text);font-size:11px;">🏠 주소 모드</strong><br>
+        <code>이름</code> <code>주소</code><br>
+        카카오판교 경기도 성남시 분당구 판교역로...
+      </div>
+    </div>
+
+    <div class="panel-section" id="stats-section" style="display:none;">
+      <div class="panel-title">현황</div>
+      <div class="stats-row">
+        <div class="stat-chip"><div class="stat-num" id="stat-total">0</div><div class="stat-lbl">전체</div></div>
+        <div class="stat-chip"><div class="stat-num" id="stat-ok">0</div><div class="stat-lbl">표시됨</div></div>
+        <div class="stat-chip"><div class="stat-num" id="stat-err">0</div><div class="stat-lbl">오류</div></div>
+      </div>
+    </div>
+
+    <div class="marker-list" id="marker-list">
+      <div class="empty-state">엑셀 파일을 업로드하면<br>마커 목록이 여기에 표시됩니다.</div>
+    </div>
   </aside>
+
   <div id="map-wrap">
+    <div id="map-placeholder">
+      <div class="placeholder-icon">🗺️</div>
+      <div class="placeholder-text">상단에 카카오 JavaScript API 키를 입력하고<br><strong style="color:var(--text)">지도 로드</strong> 버튼을 눌러주세요.</div>
+    </div>
     <div id="map"></div>
+
+    <div id="map-controls">
+      <div class="map-type-group" id="map-type-group">
+        <button class="map-type-btn active" id="type-normal"    onclick="setMapType('normal')">기본</button>
+        <button class="map-type-btn"        id="type-terrain"   onclick="setMapType('terrain')">지형</button>
+        <button class="map-type-btn"        id="type-cadastral" onclick="setMapType('cadastral')">지적</button>
+        <button class="map-type-btn"        id="type-roadview"  onclick="setMapType('roadview')">로드뷰</button>
+      </div>
+      <div class="map-action-group">
+        <button class="map-action-btn" onclick="toggleMapTypeGroup()">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="1.5" width="5" height="5" rx="1"/><rect x="9.5" y="1.5" width="5" height="5" rx="1"/><rect x="1.5" y="9.5" width="5" height="5" rx="1"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></svg>
+          지도 타입
+        </button>
+        <button class="map-action-btn" id="cluster-toggle-btn" onclick="toggleCluster()">
+          <svg viewBox="0 0 16 16" fill="currentColor"><circle cx="4" cy="4" r="2.5"/><circle cx="12" cy="4" r="2.5"/><circle cx="4" cy="12" r="2.5"/><circle cx="12" cy="12" r="2.5"/><circle cx="8" cy="8" r="2"/></svg>
+          클러스터 ON
+        </button>
+        <button class="map-action-btn danger" onclick="resetMarkers()">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M6 4V2.5h4V4M6.5 7v5M9.5 7v5M4 4l.8 8.5a1 1 0 001 .9h4.4a1 1 0 001-.9L12 4"/></svg>
+          마커 초기화
+        </button>
+      </div>
+    </div>
+
+    <div id="roadview-panel">
+      <div id="roadview-header">
+        <div id="roadview-title">로드뷰</div>
+        <button id="roadview-close" onclick="closeRoadview()">✕ 닫기</button>
+      </div>
+      <div id="roadview"></div>
+      <div id="roadview-unavail">
+        <div class="rv-icon">🚫</div>
+        <div>이 위치의 로드뷰를 불러올 수 없습니다.</div>
+      </div>
+    </div>
   </div>
 </main>
 
 <div id="toast"></div>
 
+<div id="retry-modal" style="display:none;">
+  <div id="retry-backdrop"></div>
+  <div id="retry-box">
+    <div id="retry-header">
+      <div id="retry-title">주소를 찾을 수 없습니다</div>
+      <div id="retry-count"></div>
+    </div>
+    <div id="retry-original"></div>
+    <div id="retry-input-wrap">
+      <input type="text" id="retry-input" placeholder="올바른 주소를 입력해 주세요" autocomplete="off"/>
+      <div id="retry-suggest" style="display:none;"></div>
+    </div>
+    <div id="retry-actions">
+      <button id="retry-skip-btn"     onclick="retrySkip()">건너뛰기</button>
+      <button id="retry-skip-all-btn" onclick="retrySkipAll()">모두 건너뛰기</button>
+      <button id="retry-confirm-btn"  onclick="retryConfirm()">확인</button>
+    </div>
+    <div id="retry-progress-wrap"><div id="retry-progress-bar"></div></div>
+  </div>
+</div>
+
 <script>
-let map = null, markers = [], infowindows = [], parsedData = [];
-let geocodeResults = {}, geocoder = null;
+/* ══════════════════════════════════════
+   전역 상태
+══════════════════════════════════════ */
+let map = null;
+let markers = [];
+let infowindows = [];
+let activeIdx = -1;
+let selectedMarkerIdx = -1;
+let parsedData = [];
+let roadviewObj = null;
+let rvClient = null;
+let currentMode = 'coords';
+let geocodeResults = {};
+let retryQueue = [];
+let clusterer = null;
+let clusterEnabled = true;
+let currentMapType = 'normal';
+let roadviewOverlay = null;
 
-function toast(m) { const t=document.getElementById('toast'); t.textContent=m; t.className='show'; setTimeout(()=>t.className='', 2000); }
+/* ── 토스트 ── */
+function toast(msg, type = 'info') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + type;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.className = '', 2800);
+}
 
+/* ── 모드 전환 ── */
+function switchMode(mode) {
+  currentMode = mode;
+  document.getElementById('mode-coords').style.display = mode === 'coords' ? 'block' : 'none';
+  document.getElementById('mode-addr').style.display   = mode === 'addr'   ? 'block' : 'none';
+  document.getElementById('tab-coords').classList.toggle('active', mode === 'coords');
+  document.getElementById('tab-addr').classList.toggle('active', mode === 'addr');
+}
+
+/* ── 지도 초기화 ── */
 function initMap() {
   const key = document.getElementById('api-key-input').value.trim();
-  if(!key) return toast('API 키를 입력하세요.');
-  const s = document.createElement('script');
-  s.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&autoload=false&libraries=services`;
-  s.onload = () => kakao.maps.load(() => {
-    map = new kakao.maps.Map(document.getElementById('map'), {center:new kakao.maps.LatLng(37.5665, 126.978), level:8});
-    geocoder = new kakao.maps.services.Geocoder();
-    toast('지도가 로드되었습니다.');
-  });
-  document.head.appendChild(s);
+  if (!key) { toast('API 키를 입력해 주세요.', 'error'); return; }
+  if (window.kakao && window.kakao.maps) {
+    document.getElementById('map-placeholder').style.display = 'none';
+    if (!map) createMap();
+    return;
+  }
+  const script = document.createElement('script');
+  script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&autoload=false&libraries=services,clusterer`;
+  script.onerror = () => toast('API 키가 잘못되었거나 도메인이 등록되지 않았습니다.', 'error');
+  script.onload = () => {
+    kakao.maps.load(() => {
+      document.getElementById('map-placeholder').style.display = 'none';
+      createMap();
+      toast('지도를 불러왔습니다!', 'success');
+    });
+  };
+  document.head.appendChild(script);
 }
 
-document.getElementById('file-input').onchange = (e) => {
-  const file = e.target.files[0];
-  if(!file) return;
+function createMap() {
+  map = new kakao.maps.Map(document.getElementById('map'), {
+    center: new kakao.maps.LatLng(37.5665, 126.9780),
+    level: 8
+  });
+
+  clusterer = new kakao.maps.MarkerClusterer({
+    map,
+    averageCenter: true,
+    minLevel: 4,
+    disableClickZoom: false,
+    styles: [{
+      width:'42px', height:'42px',
+      background:'#FEE500', borderRadius:'50%',
+      color:'#3A1D1D', textAlign:'center',
+      fontWeight:'700', fontSize:'13px', lineHeight:'42px',
+      border:'3px solid rgba(254,229,0,0.4)',
+      boxShadow:'0 2px 8px rgba(0,0,0,0.3)',
+      fontFamily:"'Noto Sans KR', sans-serif"
+    }]
+  });
+
+  // 지도 빈 공간 클릭 → 전체 마커 복원
+  kakao.maps.event.addListener(map, 'click', () => {
+    if (selectedMarkerIdx !== -1) showAllMarkers();
+  });
+
+  // 클러스터 클릭 → 줌인
+  kakao.maps.event.addListener(clusterer, 'clusterclick', cluster => {
+    map.setLevel(Math.max(1, map.getLevel() - 2), { anchor: cluster.getCenter(), animate: true });
+  });
+
+  if (parsedData.length) applyMarkers();
+}
+
+/* ── 파일 업로드 ── */
+const dropZone = document.getElementById('drop-zone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); handleFile(e.dataTransfer.files[0]); });
+document.getElementById('file-input').addEventListener('change', e => handleFile(e.target.files[0]));
+
+function handleFile(file) {
+  if (!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['xlsx','xls','csv'].includes(ext)) { toast('xlsx, xls, csv 파일만 지원합니다.', 'error'); return; }
   const reader = new FileReader();
-  reader.onload = (ev) => {
-    const data = new Uint8Array(ev.target.result);
-    const wb = XLSX.read(data, {type:'array'});
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const json = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
-    parsedData = json.slice(1).filter(r => r.join('').trim() !== '');
-    const headers = json[0];
-    ['col-name', 'col-addr'].forEach(id => {
-      const el = document.getElementById(id);
-      el.innerHTML = headers.map((h, i) => `<option value="${i}">${h || i}</option>`).join('');
-    });
-    document.getElementById('mapping-section').style.display = 'block';
-    document.getElementById('file-name-text').textContent = file.name;
+  reader.onload = ev => {
+    try {
+      const wb = XLSX.read(ev.target.result, { type: 'binary' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      if (rows.length < 2) { toast('데이터가 없습니다.', 'error'); return; }
+      const headers = rows[0].map(String);
+      parsedData = rows.slice(1).filter(r => r.some(c => c !== ''));
+      geocodeResults = {};
+
+      ['col-name','col-lat','col-lng','col-addr'].forEach(id => {
+        const sel = document.getElementById(id);
+        sel.innerHTML = '<option value="">-- 선택 --</option>';
+        headers.forEach((h, i) => {
+          const opt = document.createElement('option');
+          opt.value = i; opt.textContent = h || `열 ${i+1}`;
+          sel.appendChild(opt);
+        });
+      });
+
+      autoMap(headers, 'col-name', ['이름','name','명칭','장소','title','label','지점']);
+      autoMap(headers, 'col-lat',  ['위도','lat','latitude','y좌표','y_coord']);
+      autoMap(headers, 'col-lng',  ['경도','lng','lon','longitude','x좌표','x_coord']);
+      autoMap(headers, 'col-addr', ['주소','address','addr','도로명','지번','소재지']);
+
+      const hasAddr   = document.getElementById('col-addr').value !== '';
+      const hasCoords = document.getElementById('col-lat').value !== '' && document.getElementById('col-lng').value !== '';
+      if (hasAddr && !hasCoords) switchMode('addr');
+
+      document.getElementById('mapping-section').style.display = 'block';
+      dropZone.querySelector('.upload-text').innerHTML = `<strong>${file.name}</strong>${parsedData.length}개 행 읽음`;
+      toast(`${parsedData.length}개 행을 읽었습니다.`, 'success');
+    } catch (err) {
+      toast('파일 읽기 실패: ' + err.message, 'error');
+    }
   };
-  reader.readAsArrayBuffer(file);
-};
+  reader.readAsBinaryString(file);
+}
 
-// 지연 처리를 위한 헬퍼 함수
-const delay = ms => new Promise(res => setTimeout(res, ms));
+function autoMap(headers, selId, keywords) {
+  const sel = document.getElementById(selId);
+  const lower = headers.map(h => h.toLowerCase());
+  for (const kw of keywords) {
+    const idx = lower.findIndex(h => h.includes(kw));
+    if (idx !== -1) { sel.value = idx; return; }
+  }
+}
 
-async function startGeocoding() {
-  const addrIdx = Number(document.getElementById('col-addr').value);
+/* ── 마커 표시 진입점 ── */
+function applyMarkers() {
+  if (!map) { toast('먼저 지도를 로드해 주세요.', 'error'); return; }
+  if (currentMode === 'addr') startGeocoding();
+  else renderMarkers();
+}
+
+/* ══════════════════════════════════════
+   주소 지오코딩 — async/await 순차 처리
+   (핵심 수정: setTimeout 병렬 방식 → 순차 Promise 체인)
+   - done===total 조건 경쟁 없음
+   - API 응답 전 다음 요청 보내지 않아 속도 제한 대응
+══════════════════════════════════════ */
+function startGeocoding() {
+  const addrColVal = document.getElementById('col-addr').value;
+  if (addrColVal === '') { toast('주소 컬럼을 선택해 주세요.', 'error'); return; }
+
+  geocodeResults = {};
   const total = parsedData.length;
   let done = 0;
-  geocodeResults = {};
-  
-  const applyBtn = document.getElementById('apply-btn');
-  const progressDiv = document.getElementById('geocode-progress');
-  const bar = document.getElementById('geocode-bar');
+  const failedItems = [];
+
+  const barEl    = document.getElementById('geocode-bar');
   const statusEl = document.getElementById('geocode-status-el');
+  document.getElementById('geocode-progress').style.display = 'block';
+  document.getElementById('apply-btn').disabled = true;
 
-  applyBtn.disabled = true;
-  progressDiv.style.display = 'block';
+  const updateProgress = () => {
+    barEl.style.width = Math.round((done / total) * 100) + '%';
+    statusEl.textContent = `주소 변환 중... ${done} / ${total}`;
+  };
 
-  for(let i=0; i<total; i++) {
-    const addr = String(parsedData[i][addrIdx] || '').trim();
-    if(!addr) { done++; continue; }
-
-    let success = false;
-    let retryCount = 0;
-
-    while(!success && retryCount < 3) {
-      await new Promise(resolve => {
-        // 간격을 500ms(0.5초)로 늘려 429 에러 방지
-        setTimeout(() => {
-          geocoder.addressSearch(addr, async (result, status) => {
-            if(status === kakao.maps.services.Status.OK) {
-              geocodeResults[i] = {y: result[0].y, x: result[0].x};
-              success = true;
-            } else if (status === 'ERROR' || status === '429') {
-              console.warn(`[429/ERROR] 재시도 중... (${retryCount+1}/3): ${addr}`);
-              retryCount++;
-              await delay(2000); // 에러 발생 시 2초간 강제 휴식
-            } else {
-              success = true; // 주소 없음 등은 재시도 없이 넘어감
-            }
-            resolve();
-          });
-        }, 500); 
-      });
+  // 단일 주소를 Promise로 래핑
+  const geocodeOne = (idx) => new Promise(resolve => {
+    const addr = String(parsedData[idx][addrColVal] || '').trim();
+    if (!addr) {
+      geocodeResults[idx] = null;
+      done++; updateProgress(); resolve(); return;
     }
-
-    done++;
-    bar.style.width = (done/total*100) + '%';
-    statusEl.textContent = `진행 중... (${done}/${total})`;
-  }
-
-  applyBtn.disabled = false;
-  renderMarkers();
-}
-
-function renderMarkers() {
-  markers.forEach(m => m.setMap(null));
-  markers = [];
-  const list = document.getElementById('marker-list');
-  list.innerHTML = '';
-  const nameIdx = Number(document.getElementById('col-name').value);
-  const bounds = new kakao.maps.LatLngBounds();
-  let ok = 0;
-
-  parsedData.forEach((row, i) => {
-    if(!geocodeResults[i]) return;
-    const pos = new kakao.maps.LatLng(geocodeResults[i].y, geocodeResults[i].x);
-    const m = new kakao.maps.Marker({position:pos, map:map});
-    markers.push(m);
-    bounds.extend(pos);
-    ok++;
+    new kakao.maps.services.Geocoder().addressSearch(addr, (result, st) => {
+      if (st === kakao.maps.services.Status.OK && result.length > 0) {
+        geocodeResults[idx] = { lat: parseFloat(result[0].y), lng: parseFloat(result[0].x) };
+      } else {
+        geocodeResults[idx] = null;
+        failedItems.push({ idx, originalAddr: addr });
+      }
+      done++; updateProgress(); resolve();
+    });
   });
 
-  if(ok > 0) map.setBounds(bounds);
-  toast(`${ok}개 지점 표시 완료`);
+  // 순차 실행 — 이전 응답 완료 후 다음 요청
+  (async () => {
+    updateProgress();
+    for (let i = 0; i < total; i++) {
+      await geocodeOne(i);
+    }
+    statusEl.textContent = '변환 완료!';
+    document.getElementById('apply-btn').disabled = false;
+    if (failedItems.length === 0) {
+      renderMarkers();
+    } else {
+      retryQueue = [...failedItems];
+      showNextRetry();
+    }
+  })();
 }
 
-function applyMarkers() {
-  if(!geocoder) return toast('지도를 먼저 로드하세요.');
-  startGeocoding();
+/* ── 재입력 모달 ── */
+function showNextRetry() {
+  if (retryQueue.length === 0) { closeRetryModal(); renderMarkers(); return; }
+
+  const item    = retryQueue[0];
+  const nameCol = document.getElementById('col-name').value;
+  const name    = nameCol !== '' ? (parsedData[item.idx][nameCol] || `항목 ${item.idx+1}`) : `항목 ${item.idx+1}`;
+  const remaining = retryQueue.length;
+  const total   = parsedData.length;
+
+  document.getElementById('retry-modal').style.display = 'flex';
+  document.getElementById('retry-count').textContent = `남은 오류 ${remaining}개`;
+  document.getElementById('retry-original').innerHTML =
+    `<strong>🔍 인식 실패한 주소</strong>${item.originalAddr}<br><span style="color:var(--muted);font-size:11px;">항목명: ${name}</span>`;
+  document.getElementById('retry-input').value = item.originalAddr;
+  document.getElementById('retry-suggest').style.display = 'none';
+  document.getElementById('retry-progress-bar').style.width = ((total - remaining) / total * 100) + '%';
+  document.getElementById('retry-input').focus();
+}
+
+function closeRetryModal() {
+  document.getElementById('retry-modal').style.display = 'none';
+}
+
+// 이 항목만 건너뛰기
+function retrySkip() {
+  geocodeResults[retryQueue[0].idx] = null;
+  retryQueue.shift();
+  showNextRetry();
+}
+
+// 남은 모든 항목 건너뛰기
+function retrySkipAll() {
+  retryQueue.forEach(item => { geocodeResults[item.idx] = null; });
+  retryQueue = [];
+  closeRetryModal();
+  renderMarkers();
+  toast('나머지 주소를 모두 건너뛰었습니다.', 'info');
+}
+
+function retryConfirm() {
+  const addr = document.getElementById('retry-input').value.trim();
+  if (!addr) { toast('주소를 입력해 주세요.', 'error'); return; }
+  const item = retryQueue[0];
+  new kakao.maps.services.Geocoder().addressSearch(addr, (result, st) => {
+    if (st === kakao.maps.services.Status.OK && result.length > 0) {
+      geocodeResults[item.idx] = { lat: parseFloat(result[0].y), lng: parseFloat(result[0].x) };
+      retryQueue.shift();
+      showNextRetry();
+    } else {
+      toast('주소를 찾을 수 없어요. 다시 입력해 주세요.', 'error');
+      document.getElementById('retry-input').select();
+    }
+  });
+}
+
+// 자동완성
+let suggestTimer = null;
+document.getElementById('retry-input').addEventListener('input', function () {
+  clearTimeout(suggestTimer);
+  const q = this.value.trim();
+  if (q.length < 2) { document.getElementById('retry-suggest').style.display = 'none'; return; }
+  suggestTimer = setTimeout(() => fetchSuggestions(q), 300);
+});
+document.getElementById('retry-input').addEventListener('keydown', e => { if (e.key === 'Enter') retryConfirm(); });
+
+function fetchSuggestions(query) {
+  if (!window.kakao || !kakao.maps.services) return;
+  new kakao.maps.services.Geocoder().addressSearch(query, (result, st) => {
+    const sugBox = document.getElementById('retry-suggest');
+    if (st !== kakao.maps.services.Status.OK || result.length === 0) { sugBox.style.display = 'none'; return; }
+    sugBox.innerHTML = result.slice(0, 5).map((r, i) => `
+      <div class="suggest-item" onclick="selectSuggest(${i})">
+        <div class="sug-addr">${r.address_name}</div>
+        ${r.road_address ? `<div class="sug-road">도로명: ${r.road_address.address_name}</div>` : ''}
+      </div>`).join('');
+    sugBox.dataset.results = JSON.stringify(result.slice(0, 5));
+    sugBox.style.display = 'block';
+  });
+}
+
+function selectSuggest(i) {
+  const results = JSON.parse(document.getElementById('retry-suggest').dataset.results || '[]');
+  if (!results[i]) return;
+  const item = retryQueue[0];
+  geocodeResults[item.idx] = { lat: parseFloat(results[i].y), lng: parseFloat(results[i].x) };
+  retryQueue.shift();
+  document.getElementById('retry-suggest').style.display = 'none';
+  showNextRetry();
+}
+
+/* ── 지도 타입 토글 ── */
+function toggleMapTypeGroup() {
+  const g = document.getElementById('map-type-group');
+  g.style.display = g.style.display === 'flex' ? 'none' : 'flex';
+}
+
+/* ── 지도 타입 변경 ── */
+function setMapType(type) {
+  if (!map) return;
+
+  // 기존 오버레이 모두 제거
+  map.removeOverlayMapTypeId(kakao.maps.MapTypeId.USE_DISTRICT);
+  map.removeOverlayMapTypeId(kakao.maps.MapTypeId.TERRAIN);
+  if (roadviewOverlay) { roadviewOverlay.setMap(null); roadviewOverlay = null; }
+
+  // 기본 지도 타입 복원
+  map.setMapTypeId(kakao.maps.MapTypeId.ROADMAP);
+
+  if (type === 'terrain') {
+    map.addOverlayMapTypeId(kakao.maps.MapTypeId.TERRAIN);
+  } else if (type === 'cadastral') {
+    map.addOverlayMapTypeId(kakao.maps.MapTypeId.USE_DISTRICT);
+  } else if (type === 'roadview') {
+    // 로드뷰 오버레이: 지도에 로드뷰 촬영 경로(파란 선) 표시
+    roadviewOverlay = new kakao.maps.RoadviewOverlay();
+    roadviewOverlay.setMap(map);
+  }
+
+  currentMapType = type;
+  ['normal','terrain','cadastral','roadview'].forEach(t => {
+    document.getElementById('type-' + t).classList.toggle('active', t === type);
+  });
+}
+
+/* ── 클러스터 토글 ── */
+function toggleCluster() {
+  if (!clusterer) return;
+  clusterEnabled = !clusterEnabled;
+  const btn = document.getElementById('cluster-toggle-btn');
+  const svg = `<svg viewBox="0 0 16 16" fill="currentColor"><circle cx="4" cy="4" r="2.5"/><circle cx="12" cy="4" r="2.5"/><circle cx="4" cy="12" r="2.5"/><circle cx="12" cy="12" r="2.5"/><circle cx="8" cy="8" r="2"/></svg>`;
+  if (clusterEnabled) {
+    clusterer.addMarkers(markers);
+    btn.innerHTML = svg + '클러스터 ON'; btn.style.color = '';
+    toast('클러스터러를 켰습니다.', 'success');
+  } else {
+    clusterer.clear();
+    markers.forEach(m => m.setMap(map));
+    btn.innerHTML = svg + '클러스터 OFF'; btn.style.color = 'var(--kakao)';
+    toast('클러스터러를 껐습니다.', 'info');
+  }
+}
+
+/* ── 마커 초기화 ── */
+function resetMarkers() {
+  if (!map) return;
+  markers.forEach(m => m.setMap(null));
+  infowindows.forEach(iw => iw.close());
+  if (clusterer) clusterer.clear();
+  markers = []; infowindows = [];
+  parsedData = []; geocodeResults = {};
+  selectedMarkerIdx = -1;
+  document.getElementById('marker-list').innerHTML =
+    '<div class="empty-state">엑셀 파일을 업로드하면<br>마커 목록이 여기에 표시됩니다.</div>';
+  document.getElementById('stats-section').style.display = 'none';
+  document.getElementById('mapping-section').style.display = 'none';
+  document.getElementById('geocode-progress').style.display = 'none';
+  dropZone.querySelector('.upload-text').innerHTML =
+    '<strong>파일을 클릭하거나 드래그</strong>.xlsx / .xls / .csv 지원';
+  document.getElementById('file-input').value = '';
+  closeRoadview();
+  toast('마커를 초기화했습니다.', 'info');
+}
+
+/* ══════════════════════════════════════
+   마커 렌더링
+══════════════════════════════════════ */
+function renderMarkers() {
+  closeRetryModal();
+  document.getElementById('geocode-progress').style.display = 'none';
+  markers.forEach(m => m.setMap(null));
+  infowindows.forEach(iw => iw.close());
+  if (clusterer) clusterer.clear();
+  markers = []; infowindows = [];
+  selectedMarkerIdx = -1;
+
+  const nameCol = document.getElementById('col-name').value;
+  const latCol  = document.getElementById('col-lat').value;
+  const lngCol  = document.getElementById('col-lng').value;
+  let ok = 0, err = 0;
+  const bounds = new kakao.maps.LatLngBounds();
+  const listEl = document.getElementById('marker-list');
+  listEl.innerHTML = '';
+
+  parsedData.forEach((row, i) => {
+    const name = nameCol !== '' ? (row[nameCol] || `위치 ${i+1}`) : `위치 ${i+1}`;
+    let lat, lng;
+
+    if (currentMode === 'addr') {
+      const res = geocodeResults[i];
+      if (!res) { err++; addListItem(listEl, i, name, null, null, true, '주소 변환 실패'); return; }
+      lat = res.lat; lng = res.lng;
+    } else {
+      lat = parseFloat(row[latCol]); lng = parseFloat(row[lngCol]);
+      if (isNaN(lat) || isNaN(lng)) { err++; addListItem(listEl, i, name, null, null, true, '좌표 오류'); return; }
+    }
+
+    const pos = new kakao.maps.LatLng(lat, lng);
+    bounds.extend(pos);
+
+    const marker = new kakao.maps.Marker({ position: pos, title: name });
+    const iw = new kakao.maps.InfoWindow({
+      content: `<div style="padding:8px 12px;font-family:'Noto Sans KR',sans-serif;color:#1a1a22;white-space:nowrap;">
+        <div style="font-size:13px;font-weight:500;margin-bottom:2px;">${name}</div>
+        <div style="font-size:11px;color:#666;margin-bottom:4px;">${lat.toFixed(5)}, ${lng.toFixed(5)}</div>
+        <button class="rv-btn" onclick="openRoadview(${lat},${lng},'${name.replace(/'/g,"\\'")}')">🚶 로드뷰 보기</button>
+      </div>`,
+      removable: true
+    });
+
+    markers.push(marker);
+    infowindows.push(iw);
+    const mIdx = markers.length - 1;
+
+    kakao.maps.event.addListener(marker, 'click', () => {
+      infowindows.forEach(w => w.close());
+      infowindows[mIdx].open(map, marker);
+      setActive(i);
+      focusMarker(mIdx);
+    });
+
+    ok++;
+    addListItem(listEl, i, name, lat, lng, false, '');
+  });
+
+  if (clusterer && clusterEnabled) clusterer.addMarkers(markers);
+  else markers.forEach(m => m.setMap(map));
+
+  if (ok > 0) map.setBounds(bounds);
+  document.getElementById('stats-section').style.display = 'block';
+  document.getElementById('stat-total').textContent = parsedData.length;
+  document.getElementById('stat-ok').textContent = ok;
+  document.getElementById('stat-err').textContent = err;
+  toast(`마커 ${ok}개를 표시했습니다.${err ? ` (실패 ${err}개)` : ''}`, 'success');
+}
+
+function addListItem(listEl, idx, name, lat, lng, hasError, errMsg) {
+  const item = document.createElement('div');
+  item.className = 'marker-item';
+  item.id = `item-${idx}`;
+  item.innerHTML = `
+    <div class="marker-num" style="${hasError ? 'background:#e24b4a;color:#fff;' : ''}">${hasError ? '!' : idx+1}</div>
+    <div class="marker-info">
+      <div class="marker-name">${name}</div>
+      <div class="marker-coords">${hasError ? errMsg : `${lat.toFixed(5)}, ${lng.toFixed(5)}`}</div>
+    </div>`;
+  if (!hasError) {
+    item.onclick = () => {
+      infowindows.forEach(w => w.close());
+      const mi = getMarkerIdxByDataIdx(idx);
+      if (mi !== -1) { map.panTo(markers[mi].getPosition()); infowindows[mi].open(map, markers[mi]); setActive(idx); focusMarker(mi); }
+    };
+  }
+  listEl.appendChild(item);
+}
+
+/* ── 인덱스 변환 헬퍼 ── */
+function isValidDataIdx(i) {
+  if (currentMode === 'addr') return !!(geocodeResults[i]);
+  const lat = parseFloat(parsedData[i]?.[document.getElementById('col-lat').value]);
+  const lng = parseFloat(parsedData[i]?.[document.getElementById('col-lng').value]);
+  return !isNaN(lat) && !isNaN(lng);
+}
+
+function getMarkerIdxByDataIdx(dataIdx) {
+  let mi = 0;
+  for (let i = 0; i < dataIdx; i++) { if (isValidDataIdx(i)) mi++; }
+  return mi < markers.length ? mi : -1;
+}
+
+function getDataIdxByMarkerIdx(mIdx) {
+  let mi = 0;
+  for (let i = 0; i < parsedData.length; i++) {
+    if (isValidDataIdx(i)) { if (mi === mIdx) return i; mi++; }
+  }
+  return -1;
+}
+
+/* ── 마커 포커스 / 전체 표시 ── */
+function focusMarker(mIdx) {
+  if (selectedMarkerIdx === mIdx) return;
+  selectedMarkerIdx = mIdx;
+  if (clusterer) clusterer.clear();
+  markers.forEach((m, idx) => m.setMap(idx === mIdx ? map : null));
+  const dIdx = getDataIdxByMarkerIdx(mIdx);
+  document.querySelectorAll('.marker-item').forEach(el => {
+    el.style.opacity = el.id === `item-${dIdx}` ? '1' : '0.3';
+  });
+}
+
+function showAllMarkers() {
+  selectedMarkerIdx = -1;
+  infowindows.forEach(w => w.close());
+  if (clusterer && clusterEnabled) clusterer.addMarkers(markers);
+  else markers.forEach(m => m.setMap(map));
+  document.querySelectorAll('.marker-item').forEach(el => { el.style.opacity = '1'; el.classList.remove('active'); });
+  activeIdx = -1;
+}
+
+function setActive(idx) {
+  document.querySelectorAll('.marker-item').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById(`item-${idx}`);
+  if (el) { el.classList.add('active'); el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+  activeIdx = idx;
+}
+
+/* ── 로드뷰 ── */
+function openRoadview(lat, lng, name) {
+  const rvDiv   = document.getElementById('roadview');
+  const unavail = document.getElementById('roadview-unavail');
+  document.getElementById('roadview-title').textContent = '🚶 ' + name;
+  document.getElementById('roadview-panel').classList.add('open');
+  unavail.style.display = 'none';
+  rvDiv.style.display = 'block';
+
+  // 매번 새 인스턴스 → 위치 갱신 이슈 완전 해소
+  roadviewObj = new kakao.maps.Roadview(rvDiv);
+  if (!rvClient) rvClient = new kakao.maps.RoadviewClient();
+
+  const pos = new kakao.maps.LatLng(lat, lng);
+  rvClient.getNearestPanoId(pos, 50, panoId => {
+    if (panoId === null) {
+      rvClient.getNearestPanoId(pos, 500, panoId2 => {
+        if (panoId2 === null) { rvDiv.style.display = 'none'; unavail.style.display = 'flex'; }
+        else roadviewObj.setPanoId(panoId2, pos);
+      });
+    } else {
+      roadviewObj.setPanoId(panoId, pos);
+    }
+  });
+}
+
+function closeRoadview() {
+  document.getElementById('roadview-panel').classList.remove('open');
 }
 </script>
 </body>
